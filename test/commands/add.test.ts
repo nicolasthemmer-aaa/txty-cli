@@ -34,4 +34,8 @@ describe("add", () => {
 
     // Backward compat: existing plain content arg still works
     test.command(["add", `app.title-${uuid.v4()}`, "MyApp"]).it("still succeeds with plain content (backward compat)");
+
+    const duplicateKey = `app.duplicate-${uuid.v4()}`;
+    test.command(["add", duplicateKey]).it("creates the key used for the duplicate check");
+    test.command(["add", duplicateKey]).exit(1).it("fails when the key already exists");
 });

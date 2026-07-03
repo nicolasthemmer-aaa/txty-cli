@@ -107,19 +107,27 @@ texterify add "app.apples" --plural
 
 By default a translation is added to the project's default language. Use `--language` to target a specific language, matched by its ISO code (e.g. `en`, `de`) or, as a fallback, by its name.
 
-Because key names are unique per project, running `add` again with the same key name reuses the existing key instead of failing, so you can fill in additional languages with follow-up commands:
-
 ```sh
-# Creates the key and adds the English translation.
 texterify add "app.apples" "%{count} apples" --one "%{count} apple" --language en
-
-# Reuses the existing key and adds the German translation.
-texterify add "app.apples" "%{count} Äpfel" --one "%{count} Apfel" --language de
 ```
 
 | Flag         | Description                                                                                    |
 | ------------ | ---------------------------------------------------------------------------------------------- |
 | `--language` | Language to add the translation for (ISO code like `en`/`de`, or the language name). Optional. |
+
+### Updating translations
+
+`add` only creates new keys and fails if a key with the same name already exists. To change the translation content of an existing key, use `update`. It fails if the key does not exist, so the two commands never overwrite each other's intent.
+
+`update` accepts the same `--language` and plural form flags as `add`. Key names are unique per project, so you can fill in additional languages with follow-up `update` commands:
+
+```sh
+# Update the English translation of an existing key.
+texterify update "app.apples" "%{count} apples" --one "%{count} apple" --language en
+
+# Update the German translation of the same key.
+texterify update "app.apples" "%{count} Äpfel" --one "%{count} Apfel" --language de
+```
 
 ## Upgrade
 

@@ -64,18 +64,11 @@ const KeysAPI = {
             many?: string;
         };
     }) => {
-        // Reuse an existing key with the same name so translations for additional
-        // languages can be added to it (key names are unique per project). Only
-        // create a new key when none exists yet.
-        const existingKey = await KeysAPI.findKeyByName(options.projectId, options.name);
-
-        const newKey: any = existingKey
-            ? { data: existingKey }
-            : await API.postRequest(`projects/${options.projectId}/keys`, {
-                  name: options.name,
-                  description: options.description,
-                  pluralization_enabled: options.pluralizationEnabled
-              });
+        const newKey: any = await API.postRequest(`projects/${options.projectId}/keys`, {
+            name: options.name,
+            description: options.description,
+            pluralization_enabled: options.pluralizationEnabled
+        });
 
         if (newKey.error) {
             return newKey;
