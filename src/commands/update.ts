@@ -2,6 +2,7 @@ import { Command, Flags } from "@oclif/core";
 import { ErrorUtils } from "../api/ErrorUtils";
 import { KeysAPI } from "../api/KeysAPI";
 import { LanguagesAPI } from "../api/LanguagesAPI";
+import { TranslationsAPI } from "../api/TranslationsAPI";
 import { Logger } from "../Logger";
 import { Settings } from "../Settings";
 import { Validators } from "../Validators";
@@ -13,18 +14,15 @@ import { auth_email_flag } from "../flags/auth_email_flag";
 import { auth_secret_flag } from "../flags/auth_secret_flag";
 import { help_flag } from "../flags/help_flag";
 
-export default class Add extends Command {
-    static description = "add a new key with an optional default language translation content";
-
-    static strict = false;
+export default class Update extends Command {
+    static description = "update the translation content of an existing key";
 
     static flags = {
         help: help_flag,
         "project-path": Flags.string(),
-        description: Flags.string({ description: "Description of the key." }),
         language: Flags.string({
             description:
-                'The language to add the translation for, matched by its ISO code (e.g. "en", "de") or name. Defaults to the project\'s default language.'
+                'The language to update the translation for, matched by its ISO code (e.g. "en", "de") or name. Defaults to the project\'s default language.'
         }),
         plural: Flags.boolean({
             description: "Enable pluralization for the key. Implied when a plural form flag is set.",
@@ -39,19 +37,16 @@ export default class Add extends Command {
         "auth-secret": auth_secret_flag
     };
 
-    static args = [{ name: "name", required: true }];
+    static args = [{ name: "name", required: true }, { name: "content" }];
 
     static examples = [
-        '$ texterify add "app.title" "MyApp" --description "The name of the app."',
-        '$ texterify add "app.description" "My app description"',
-        '$ texterify add "app.title" en="MyApp" de="MeineApp"',
-        '$ texterify add "app.title" --description "The app name" en="MyApp" de="MeineApp"',
-        '$ texterify add "app.apples" "%{count} apples" --one "%{count} apple"',
-        '$ texterify add "app.apples" "%{count} Äpfel" --one "%{count} Apfel" --language de'
+        '$ texterify update "app.title" "MyRenamedApp"',
+        '$ texterify update "app.apples" "%{count} apples" --one "%{count} apple"',
+        '$ texterify update "app.apples" "%{count} Äpfel" --one "%{count} Apfel" --language de'
     ];
 
     async run() {
-        const { args, flags, argv } = await this.parse(Add);
+        const { args, flags } = await this.parse(Update);
         Settings.setAuthCredentialsPassedViaCLI({
             email: flags["auth-email"],
             secret: flags["auth-secret"]
@@ -68,36 +63,9 @@ export default class Add extends Command {
         const projectId = Settings.getProjectID();
         Validators.ensureProjectId(projectId);
 
-        // Parse remaining positional args: "lang=content" pairs or plain default content
-        const langTranslations: { [langCode: string]: string } = {};
-        let defaultContent: string | undefined;
-
-        // Filter out the declared key name arg and any flag-like tokens from argv
-        const extraArgs = (argv as string[]).filter((tok) => tok !== args.name && !tok.startsWith("-"));
-
-        for (const arg of extraArgs) {
-            const eqIndex = arg.indexOf("=");
-            if (eqIndex > 0) {
-                const langCode = arg.substring(0, eqIndex);
-                const content = arg.substring(eqIndex + 1);
-                langTranslations[langCode] = content;
-            } else {
-                defaultContent = arg;
-            }
-        }
-
-        if (defaultContent && Object.keys(langTranslations).length > 0) {
-            Logger.warn(
-                "Both a default translation and language-specific translations were provided. " +
-                    "The default translation will target the project's default language."
-            );
-        }
-
         const existingKey = await KeysAPI.findKeyByName(projectId, args.name);
-        if (existingKey) {
-            Logger.error(
-                `A key named "${args.name}" already exists. Use "texterify update" to change its translation content.`
-            );
+        if (!existingKey) {
+            Logger.error(`No key named "${args.name}" exists. Use "texterify add" to create it before updating.`);
             Validators.exitWithError(this);
         }
 
@@ -125,27 +93,30 @@ export default class Add extends Command {
 
         let response: any;
         try {
-            response = await KeysAPI.createKey({
+            response = await TranslationsAPI.createTranslation({
                 projectId: projectId,
-                name: args.name,
-                description: flags.description || "",
-                defaultLanguageTranslation: defaultContent,
-                langTranslations: Object.keys(langTranslations).length > 0 ? langTranslations : undefined,
+                keyId: existingKey.attributes.id,
+                content: args.content,
                 languageId: languageId,
                 pluralizationEnabled: pluralizationEnabled,
-                pluralForms: pluralForms
+                ...pluralForms
             });
         } catch (error) {
-            Logger.error("Failed to add key.");
+            Logger.error("Failed to update key.");
             showErrorFixSuggestions(error);
             Validators.exitWithError(this);
         }
 
-        if (response?.error) {
+        if (response?.error === "NO_DEFAULT_LANGUAGE_SPECIFIED") {
+            Logger.error(
+                "You need to define a default language if you want to update translations for your default language directly."
+            );
+            Validators.exitWithError(this);
+        } else if (response?.error) {
             ErrorUtils.getAndPrintErrors(response);
             Validators.exitWithError(this);
         } else {
-            Logger.success(`Successfully added key "${args.name}".`);
+            Logger.success(`Successfully updated key "${args.name}".`);
         }
     }
 }

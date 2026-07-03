@@ -28,16 +28,46 @@ const KeysAPI = {
         return API.getRequest(`projects/${projectId}/keys`);
     },
 
+    // Looks up an existing key by its exact name within the project.
+    // Returns the key data (JSON:API resource) or null when no key matches.
+    findKeyByName: async (projectId: string, name: string) => {
+        const response: any = await API.getRequest(`projects/${projectId}/keys`, {
+            search: name,
+            match: "exactly",
+            case_sensitive: "true"
+        });
+
+        if (response.error || !response.data) {
+            return null;
+        }
+
+        const match = response.data.find((key: any) => {
+            return key.attributes && key.attributes.name === name;
+        });
+
+        return match || null;
+    },
+
     createKey: async (options: {
         projectId: string;
         name: string;
         defaultLanguageTranslation?: string;
         description: string;
         langTranslations?: { [langCode: string]: string };
+        languageId?: string;
+        pluralizationEnabled?: boolean;
+        pluralForms?: {
+            zero?: string;
+            one?: string;
+            two?: string;
+            few?: string;
+            many?: string;
+        };
     }) => {
         const newKey: any = await API.postRequest(`projects/${options.projectId}/keys`, {
             name: options.name,
-            description: options.description
+            description: options.description,
+            pluralization_enabled: options.pluralizationEnabled
         });
 
         if (newKey.error) {
@@ -46,12 +76,23 @@ const KeysAPI = {
 
         const keyId = newKey.data.attributes.id;
 
-        // Existing behavior: default language translation (no explicit language ID)
-        if (options.defaultLanguageTranslation) {
+        // Existing behavior: default language translation (with optional explicit
+        // language ID and plural forms).
+        const hasPluralForm =
+            options.pluralForms &&
+            Object.values(options.pluralForms).some((form) => {
+                return form !== undefined;
+            });
+        const hasTranslationContent = options.defaultLanguageTranslation !== undefined || hasPluralForm;
+
+        if (hasTranslationContent) {
             const newTranslationResponse: any = await TranslationsAPI.createTranslation({
                 content: options.defaultLanguageTranslation,
                 keyId: keyId,
-                projectId: options.projectId
+                projectId: options.projectId,
+                languageId: options.languageId,
+                pluralizationEnabled: options.pluralizationEnabled,
+                ...options.pluralForms
             });
 
             if (newTranslationResponse.error === "NO_DEFAULT_LANGUAGE_SPECIFIED") {
