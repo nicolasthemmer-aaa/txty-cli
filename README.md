@@ -80,6 +80,47 @@ Example `texterify.json`
 
 If you have successfully configured your project you can try to do `texterify <command>` in the directory where you placed your project config. To get a list of all commands your current version supports try `texterify -h`.
 
+### Adding plurals
+
+Keys can be created with pluralization enabled. The positional `content` argument is used as the `other` plural form, and each remaining plural form has its own flag: `--zero`, `--one`, `--two`, `--few`, `--many`.
+
+```sh
+texterify add "app.apples" "%{count} apples" --one "%{count} apple"
+```
+
+Passing any plural form flag automatically enables pluralization for the key. To create a pluralized key without immediately filling every form, pass `--plural` explicitly:
+
+```sh
+texterify add "app.apples" --plural
+```
+
+| Flag       | Description                                                          |
+| ---------- | -------------------------------------------------------------------- |
+| `--plural` | Enable pluralization for the key. Implied when a plural form is set. |
+| `--zero`   | Translation content for the plural form `zero`.                      |
+| `--one`    | Translation content for the plural form `one`.                       |
+| `--two`    | Translation content for the plural form `two`.                       |
+| `--few`    | Translation content for the plural form `few`.                       |
+| `--many`   | Translation content for the plural form `many`.                      |
+
+### Adding translations for a specific language
+
+By default a translation is added to the project's default language. Use `--language` to target a specific language, matched by its ISO code (e.g. `en`, `de`) or, as a fallback, by its name.
+
+Because key names are unique per project, running `add` again with the same key name reuses the existing key instead of failing, so you can fill in additional languages with follow-up commands:
+
+```sh
+# Creates the key and adds the English translation.
+texterify add "app.apples" "%{count} apples" --one "%{count} apple" --language en
+
+# Reuses the existing key and adds the German translation.
+texterify add "app.apples" "%{count} Äpfel" --one "%{count} Apfel" --language de
+```
+
+| Flag         | Description                                                                                    |
+| ------------ | ---------------------------------------------------------------------------------------------- |
+| `--language` | Language to add the translation for (ISO code like `en`/`de`, or the language name). Optional. |
+
 ## Upgrade
 
 ```sh

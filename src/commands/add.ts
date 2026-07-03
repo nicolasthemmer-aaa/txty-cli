@@ -1,6 +1,7 @@
 import { Command, Flags } from "@oclif/core";
 import { ErrorUtils } from "../api/ErrorUtils";
 import { KeysAPI } from "../api/KeysAPI";
+import { LanguagesAPI } from "../api/LanguagesAPI";
 import { Logger } from "../Logger";
 import { Settings } from "../Settings";
 import { Validators } from "../Validators";
@@ -21,6 +22,19 @@ export default class Add extends Command {
         help: help_flag,
         "project-path": Flags.string(),
         description: Flags.string({ description: "Description of the key." }),
+        language: Flags.string({
+            description:
+                'The language to add the translation for, matched by its ISO code (e.g. "en", "de") or name. Defaults to the project\'s default language.'
+        }),
+        plural: Flags.boolean({
+            description: "Enable pluralization for the key. Implied when a plural form flag is set.",
+            default: false
+        }),
+        zero: Flags.string({ description: "Translation content for the plural form 'zero'." }),
+        one: Flags.string({ description: "Translation content for the plural form 'one'." }),
+        two: Flags.string({ description: "Translation content for the plural form 'two'." }),
+        few: Flags.string({ description: "Translation content for the plural form 'few'." }),
+        many: Flags.string({ description: "Translation content for the plural form 'many'." }),
         "auth-email": auth_email_flag,
         "auth-secret": auth_secret_flag
     };
@@ -31,7 +45,9 @@ export default class Add extends Command {
         '$ texterify add "app.title" "MyApp" --description "The name of the app."',
         '$ texterify add "app.description" "My app description"',
         '$ texterify add "app.title" en="MyApp" de="MeineApp"',
-        '$ texterify add "app.title" --description "The app name" en="MyApp" de="MeineApp"'
+        '$ texterify add "app.title" --description "The app name" en="MyApp" de="MeineApp"',
+        '$ texterify add "app.apples" "%{count} apples" --one "%{count} apple"',
+        '$ texterify add "app.apples" "%{count} Äpfel" --one "%{count} Apfel" --language de'
     ];
 
     async run() {
@@ -77,6 +93,28 @@ export default class Add extends Command {
             );
         }
 
+        const pluralForms = {
+            zero: flags.zero,
+            one: flags.one,
+            two: flags.two,
+            few: flags.few,
+            many: flags.many
+        };
+        const hasPluralForm = Object.values(pluralForms).some((form) => {
+            return form !== undefined;
+        });
+        const pluralizationEnabled = flags.plural || hasPluralForm;
+
+        let languageId: string | undefined;
+        if (flags.language) {
+            const resolvedLanguageId = await LanguagesAPI.resolveLanguageId(projectId, flags.language);
+            if (!resolvedLanguageId) {
+                Logger.error(`Could not find a language matching "${flags.language}" in this project.`);
+                Validators.exitWithError(this);
+            }
+            languageId = resolvedLanguageId || undefined;
+        }
+
         let response: any;
         try {
             response = await KeysAPI.createKey({
@@ -84,7 +122,10 @@ export default class Add extends Command {
                 name: args.name,
                 description: flags.description || "",
                 defaultLanguageTranslation: defaultContent,
-                langTranslations: Object.keys(langTranslations).length > 0 ? langTranslations : undefined
+                langTranslations: Object.keys(langTranslations).length > 0 ? langTranslations : undefined,
+                languageId: languageId,
+                pluralizationEnabled: pluralizationEnabled,
+                pluralForms: pluralForms
             });
         } catch (error) {
             Logger.error("Failed to add key.");
